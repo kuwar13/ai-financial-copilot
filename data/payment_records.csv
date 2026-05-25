@@ -1,0 +1,4 @@
+invoice_number,vendor,invoice_amount,payment_amount,status
+INV-001,CloudTech Services,8500,8500,Paid
+INV-002,DataSecure Inc,12500,0,Unpaid
+INV-003,AI Analytics LLC,6200,5800,Mismatch

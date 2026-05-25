@@ -1,0 +1,21 @@
+invoice_number,vendor,invoice_amount,payment_amount,status,department,due_date,po_number
+INV-001,CloudTech Services,8500,8500,Paid,Engineering,2026-05-20,PO-7788
+INV-002,DataSecure Inc,12500,0,Unpaid,Finance,2026-05-01,Missing
+INV-003,AI Analytics LLC,6200,5800,Mismatch,Analytics,2026-05-15,PO-9912
+INV-004,SecureOps LLC,18000,0,Unpaid,Security,2026-04-15,Missing
+INV-005,Nova Systems,9500,9500,Paid,Operations,2026-05-30,PO-2211
+INV-006,Quantum Payments,21000,21000,Paid,Finance,2026-06-10,PO-7811
+INV-007,Vertex AI Corp,3000,2000,Mismatch,AI,2026-05-25,PO-8872
+INV-008,BluePeak Hosting,7600,7600,Paid,Engineering,2026-05-28,PO-4431
+INV-009,Omega Cyber,14500,0,Unpaid,Security,2026-04-30,Missing
+INV-010,RapidCloud Inc,5000,5000,Paid,Cloud,2026-06-02,PO-1991
+INV-011,FinSecure LLC,25000,24000,Mismatch,Finance,2026-05-18,PO-9122
+INV-012,Alpha Data Systems,11000,0,Unpaid,Analytics,2026-04-20,Missing
+INV-013,NextGen Robotics,9800,9800,Paid,Operations,2026-06-05,PO-6521
+INV-014,CyberMatrix,6700,5000,Mismatch,Security,2026-05-10,PO-7612
+INV-015,Delta Networks,13000,13000,Paid,Infrastructure,2026-05-27,PO-8841
+INV-016,Insight AI,7200,7200,Paid,AI,2026-06-12,PO-3345
+INV-017,SecurePay Global,19500,0,Unpaid,Finance,2026-04-22,Missing
+INV-018,Core Analytics,8800,6000,Mismatch,Analytics,2026-05-08,PO-1192
+INV-019,CloudNova Tech,15700,15700,Paid,Cloud,2026-06-14,PO-4428
+INV-020,Vision Data Corp,4500,4500,Paid,Engineering,2026-05-31,PO-5543

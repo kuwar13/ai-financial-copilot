@@ -1,0 +1,13 @@
+streamlit
+langchain
+langchain-community
+chromadb
+sentence-transformers
+groq
+python-dotenv
+pandas
+pypdf
+llama-index
+llama-index-embeddings-huggingface
+llama-index-llms-groq
+tabulate

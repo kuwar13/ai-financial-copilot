@@ -1,0 +1,9 @@
+Invoice Number: INV-001
+Vendor: CloudTech Services
+PO Number: PO-7788
+Invoice Amount: 8500
+Payment Status: Paid
+Payment Amount: 8500
+Invoice Date: 2026-04-20
+Due Date: 2026-05-20
+Department: Engineering

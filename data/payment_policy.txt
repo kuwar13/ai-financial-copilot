@@ -1,0 +1,7 @@
+Company Payment Policy
+
+1. Any invoice above $10,000 requires manager approval.
+2. Every invoice must include a valid PO number.
+3. Invoices must be paid within 30 days of the invoice date.
+4. Duplicate invoice numbers should be flagged for review.
+5. If payment amount does not match invoice amount, the invoice must be reviewed.
