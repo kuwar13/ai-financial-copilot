@@ -4,7 +4,7 @@ import streamlit as st
 from dotenv import load_dotenv
 from groq import Groq
 
-from langchain_community.document_loaders import DirectoryLoader, TextLoader, CSVLoader, PyPDFLoader
+from langchain_community.document_loaders import CSVLoader, TextLoader, DirectoryLoader
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -24,7 +24,7 @@ st.set_page_config(
 )
 
 st.title("💼 AI Financial Operations Copilot")
-st.caption("GenAI + RAG assistant for financial documents, invoices, policies, and CSV analysis")
+st.caption("GenAI + RAG assistant for CSV financial data and TXT policy rules")
 
 
 def get_groq_client():
@@ -44,6 +44,11 @@ def get_csv_files():
     return [f for f in os.listdir(DATA_DIR) if f.lower().endswith(".csv")]
 
 
+def get_txt_files():
+    ensure_data_dir()
+    return [f for f in os.listdir(DATA_DIR) if f.lower().endswith(".txt")]
+
+
 def load_selected_csv(selected_csv):
     if not selected_csv:
         return None
@@ -56,9 +61,34 @@ def load_selected_csv(selected_csv):
     return pd.read_csv(path)
 
 
-def load_documents_langchain():
+def load_selected_policy_text(selected_policy):
+    if not selected_policy:
+        return "No policy file selected."
+
+    path = os.path.join(DATA_DIR, selected_policy)
+
+    if not os.path.exists(path):
+        return "Selected policy file not found."
+
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read().strip()
+
+    if not content:
+        return "Selected policy file is empty."
+
+    return content
+
+
+def load_documents_for_rag():
     docs = []
     ensure_data_dir()
+
+    for file in os.listdir(DATA_DIR):
+        file_path = os.path.join(DATA_DIR, file)
+
+        if file.lower().endswith(".csv"):
+            loader = CSVLoader(file_path=file_path)
+            docs.extend(loader.load())
 
     txt_loader = DirectoryLoader(
         DATA_DIR,
@@ -68,23 +98,14 @@ def load_documents_langchain():
     )
     docs.extend(txt_loader.load())
 
-    for file in os.listdir(DATA_DIR):
-        file_path = os.path.join(DATA_DIR, file)
-
-        if file.lower().endswith(".csv"):
-            docs.extend(CSVLoader(file_path=file_path).load())
-
-        if file.lower().endswith(".pdf"):
-            docs.extend(PyPDFLoader(file_path).load())
-
     return docs
 
 
-def build_langchain_vectorstore():
-    docs = load_documents_langchain()
+def build_rag_index():
+    docs = load_documents_for_rag()
 
     if not docs:
-        st.warning("No documents found in data folder.")
+        st.warning("No CSV or TXT files found. Upload files first.")
         return None
 
     splitter = RecursiveCharacterTextSplitter(
@@ -108,7 +129,7 @@ def build_langchain_vectorstore():
     return vectorstore
 
 
-def load_langchain_vectorstore():
+def load_vectorstore():
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
@@ -119,59 +140,81 @@ def load_langchain_vectorstore():
     )
 
 
-def retrieve_context(query, k=8):
-    vectorstore = load_langchain_vectorstore()
-    retriever = vectorstore.as_retriever(search_kwargs={"k": k})
-    docs = retriever.invoke(query)
+def retrieve_context(question, selected_csv=None, selected_policy=None, k=8):
+    vectorstore = load_vectorstore()
+
+    docs = vectorstore.similarity_search(question, k=30)
+    filtered_docs = []
+
+    for doc in docs:
+        source = str(doc.metadata.get("source", "")).lower()
+
+        csv_match = selected_csv and selected_csv.lower() in source
+        policy_match = selected_policy and selected_policy.lower() in source
+
+        if csv_match or policy_match:
+            filtered_docs.append(doc)
+
+    if filtered_docs:
+        docs = filtered_docs[:k]
+    else:
+        docs = docs[:k]
+
     context = "\n\n".join([doc.page_content for doc in docs])
+
     return context, docs
 
 
-def ask_general_finance_ai(question, df, selected_csv, retrieved_context):
+def ask_finance_ai(question, df, selected_csv, selected_policy, policy_text, retrieved_context):
     client = get_groq_client()
 
-    csv_context = "No CSV selected."
+    csv_table_context = "No CSV selected."
 
     if df is not None:
         max_rows = 100
         limited_df = df.head(max_rows)
-        csv_context = f"""
+
+        csv_table_context = f"""
 Selected CSV file: {selected_csv}
 Rows shown to you: {len(limited_df)} out of {len(df)}
 Columns: {", ".join(df.columns)}
 
-CSV Table:
+CSV Table Preview:
 {limited_df.to_markdown(index=False)}
 """
 
     prompt = f"""
 You are an AI Financial Operations Copilot.
 
-You may receive two types of context:
-1. CSV table context for invoice/payment records.
-2. Retrieved document context from uploaded PDFs/TXT/CSV files, such as policies, invoice text, audit rules, and payment guidelines.
+You analyze financial CSV data and company policy TXT files.
 
-Use the available context to answer the user's question.
+Use ONLY the provided context.
+Do not invent invoice IDs, vendors, dates, amounts, departments, PO numbers, statuses, risk categories, or policy rules.
 
-Rules:
-- Use ONLY the provided context.
-- Do not invent invoice IDs, vendors, dates, amounts, departments, or policy rules.
-- If the question is about the CSV, analyze the CSV table directly.
-- If the question is about policy or document rules, use the retrieved document context.
-- If both are relevant, combine CSV facts with policy context.
-- If the answer is not available, say you do not have enough information.
+If the question is about invoice/payment data, use the CSV table context and retrieved CSV chunks.
+If the question is about company rules/policy, use the Selected Policy Text first.
+If both are relevant, combine CSV facts with policy rules.
 
-CSV Context:
-{csv_context}
+Selected CSV:
+{selected_csv}
 
-Retrieved Document Context:
+Selected Policy TXT:
+{selected_policy}
+
+Selected Policy Text:
+{policy_text}
+
+CSV Table Context:
+{csv_table_context}
+
+Retrieved RAG Context:
 {retrieved_context}
 
 User Question:
 {question}
 
 Answer clearly and practically.
-If listing records, include important fields such as invoice ID, vendor/supplier, amount, status, due date, department/team, PO, or risk category when available.
+If listing records, include important fields such as invoice ID, vendor/supplier, amount, paid amount, status, due date, department/team, PO, or risk category when available.
 """
 
     response = client.chat.completions.create(
@@ -192,23 +235,59 @@ If listing records, include important fields such as invoice ID, vendor/supplier
     return response.choices[0].message.content
 
 
-def validate_invoice_agent(invoice_text):
-    policy_query = "company payment policy invoice approval purchase order PO number payment mismatch overdue invoice rules"
-    policy_context, policy_docs = retrieve_context(policy_query, k=8)
-
+def validate_invoice_agent(invoice_text, df, selected_csv, selected_policy, policy_text, retrieved_context):
     client = get_groq_client()
+
+    csv_table_context = "No CSV selected."
+
+    if df is not None:
+        max_rows = 100
+        limited_df = df.head(max_rows)
+
+        csv_table_context = f"""
+Selected CSV file: {selected_csv}
+Rows shown to you: {len(limited_df)} out of {len(df)}
+Columns: {", ".join(df.columns)}
+
+CSV Table Preview:
+{limited_df.to_markdown(index=False)}
+"""
 
     prompt = f"""
 You are an AI invoice validation agent.
 
-Use the uploaded policy/document context below to validate the invoice.
-Do NOT invent policy rules.
-If the policy is missing, say policy context is missing.
+Use the selected CSV context, selected policy text, and retrieved RAG context to validate the pasted invoice.
 
-Policy / Document Context:
-{policy_context}
+Do not invent policy rules.
+Do not invent invoice data.
+If the invoice is not present in the selected CSV, say that clearly and then analyze only the pasted invoice text using the selected policy.
 
-Invoice:
+Look for:
+- missing PO number
+- unpaid or pending payment status
+- payment amount mismatch
+- unusually high invoice amount
+- high risk category
+- due date concerns
+- vendor or department risk
+- policy violations
+
+Selected CSV:
+{selected_csv}
+
+Selected Policy TXT:
+{selected_policy}
+
+Selected Policy Text:
+{policy_text}
+
+CSV Table Context:
+{csv_table_context}
+
+Retrieved RAG Context:
+{retrieved_context}
+
+Invoice Text:
 {invoice_text}
 
 Return the result in this format:
@@ -224,7 +303,7 @@ Explanation:
         messages=[
             {
                 "role": "system",
-                "content": "You validate invoices using uploaded company policy context."
+                "content": "You validate invoices using financial CSV context and selected company policy context."
             },
             {
                 "role": "user",
@@ -234,15 +313,15 @@ Explanation:
         temperature=0.1
     )
 
-    return response.choices[0].message.content, policy_docs
+    return response.choices[0].message.content
 
 
 with st.sidebar:
-    st.header("📄 Document Controls")
+    st.header("📄 File Upload")
 
     uploaded_files = st.file_uploader(
-        "Upload TXT, PDF, or CSV files",
-        type=["txt", "pdf", "csv"],
+        "Upload CSV and TXT files",
+        type=["csv", "txt"],
         accept_multiple_files=True
     )
 
@@ -254,11 +333,11 @@ with st.sidebar:
             with open(file_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
 
-        st.success("Files uploaded successfully.")
+        st.success("File(s) uploaded successfully.")
 
     if st.button("Build / Refresh RAG Index"):
-        with st.spinner("Building LangChain + ChromaDB vector index..."):
-            build_langchain_vectorstore()
+        with st.spinner("Building RAG index with LangChain + ChromaDB + Hugging Face embeddings..."):
+            build_rag_index()
         st.success("RAG index created successfully.")
 
     st.divider()
@@ -270,29 +349,48 @@ with st.sidebar:
     selected_df = None
 
     if csv_files:
-        selected_csv = st.selectbox("Select CSV for analysis", csv_files)
+        selected_csv = st.selectbox("Select CSV for invoice/payment data", csv_files)
         selected_df = load_selected_csv(selected_csv)
 
         if selected_df is not None:
-            st.caption(f"Selected CSV has {len(selected_df)} rows and {len(selected_df.columns)} columns.")
+            st.caption(
+                f"Selected CSV has {len(selected_df)} rows and {len(selected_df.columns)} columns."
+            )
     else:
-        st.info("Upload a CSV to enable CSV analysis.")
+        st.info("Upload a CSV to enable invoice/payment analysis.")
+
+    st.divider()
+
+    st.header("📜 Policy Selection")
+    txt_files = get_txt_files()
+
+    selected_policy = None
+    policy_text = "No policy file selected."
+
+    if txt_files:
+        selected_policy = st.selectbox("Select TXT policy file", txt_files)
+        policy_text = load_selected_policy_text(selected_policy)
+
+        with st.expander("Preview selected policy"):
+            st.write(policy_text)
+    else:
+        st.info("Upload a TXT policy file to enable policy-based analysis.")
 
     st.divider()
 
     st.write("Try these questions:")
-    st.code("How many records are there?")
+    st.code("Summarize policy.")
+    st.code("Which invoices violate company policy?")
+    st.code("Which invoices require director approval?")
+    st.code("Which invoices have missing PO numbers?")
     st.code("List all high risk invoices.")
     st.code("Compare BILL-1001 with BILL-1013.")
-    st.code("Which invoices are due before 2026-05-01?")
-    st.code("Does BILL-1013 violate company policy?")
-    st.code("Summarize the payment policy.")
 
 
 tab1, tab2, tab3 = st.tabs(
     [
         "💬 AI Finance Chat",
-        "🤖 Policy-Based Invoice Agent",
+        "🤖 Invoice Validation Agent",
         "📊 CSV Preview"
     ]
 )
@@ -300,32 +398,38 @@ tab1, tab2, tab3 = st.tabs(
 
 with tab1:
     st.subheader("AI Finance Chat")
-    st.write("Ask questions about uploaded CSVs, invoices, policies, PDFs, and payment documents.")
+    st.write(
+        "Ask natural-language questions about selected CSV invoice/payment data and selected TXT policy rules."
+    )
 
     question = st.text_input("Ask a finance question")
 
     if st.button("Ask AI"):
         if not question:
             st.warning("Please enter a question.")
+        elif selected_df is None:
+            st.warning("Please upload and select a CSV first.")
         else:
-            with st.spinner("Analyzing uploaded data and documents..."):
+            with st.spinner("Analyzing CSV and policy context with GenAI + RAG..."):
                 try:
-                    retrieved_context, docs = retrieve_context(question, k=8)
-                    answer = ask_general_finance_ai(
+                    retrieved_context, docs = retrieve_context(
+                        question,
+                        selected_csv=selected_csv,
+                        selected_policy=selected_policy,
+                        k=8
+                    )
+
+                    answer = ask_finance_ai(
                         question=question,
                         df=selected_df,
                         selected_csv=selected_csv,
+                        selected_policy=selected_policy,
+                        policy_text=policy_text,
                         retrieved_context=retrieved_context
                     )
 
                     st.markdown("### Answer")
                     st.write(answer)
-
-                    # st.markdown("### Retrieved Sources")
-                    # for i, doc in enumerate(docs, start=1):
-                    #     source = doc.metadata.get("source", "Unknown source")
-                    #     st.write(f"**Source {i}:** {source}")
-                    #     st.info(doc.page_content[:700])
 
                 except Exception as e:
                     st.error(f"Error: {e}")
@@ -333,40 +437,53 @@ with tab1:
 
 
 with tab2:
-    st.subheader("Agentic AI: Policy-Based Invoice Validation")
-    st.write("This agent retrieves uploaded policy context first, then validates invoice text.")
+    st.subheader("Agentic AI: Invoice Validation")
+    st.write("Paste an invoice and let AI review it using selected CSV + selected TXT policy context.")
 
     invoice_input = st.text_area(
         "Paste invoice text here",
         height=260,
-        value="""Invoice Number: INV-002
-Vendor: DataSecure Inc
-PO Number: Missing
-Invoice Amount: 12500
-Payment Status: Unpaid
-Payment Amount: 0
-Invoice Date: 2026-04-01
-Due Date: 2026-05-01
-Department: Finance"""
+        value="""Invoice Number: BILL-1014
+Vendor: CyberShield LLC
+PO Number: PO-A114
+Invoice Amount: 21500
+Payment Status: Mismatch
+Payment Amount: 20000
+Invoice Date: 2026-04-28
+Due Date: 2026-05-28
+Department: Security
+Risk Category: High"""
     )
 
-    if st.button("Validate Invoice Against Uploaded Policy"):
-        with st.spinner("Retrieving policy and validating invoice..."):
-            try:
-                result, policy_docs = validate_invoice_agent(invoice_input)
+    if st.button("Validate Invoice"):
+        if selected_df is None:
+            st.warning("Please upload and select a CSV first.")
+        else:
+            with st.spinner("Invoice validation agent is reviewing..."):
+                try:
+                    agent_query = invoice_input + "\n\ncompany policy invoice validation payment rules"
+                    retrieved_context, docs = retrieve_context(
+                        agent_query,
+                        selected_csv=selected_csv,
+                        selected_policy=selected_policy,
+                        k=8
+                    )
 
-                st.markdown("### Agent Result")
-                st.write(result)
+                    result = validate_invoice_agent(
+                        invoice_text=invoice_input,
+                        df=selected_df,
+                        selected_csv=selected_csv,
+                        selected_policy=selected_policy,
+                        policy_text=policy_text,
+                        retrieved_context=retrieved_context
+                    )
 
-                # st.markdown("### Policy Sources Used")
-                # for i, doc in enumerate(policy_docs, start=1):
-                #     source = doc.metadata.get("source", "Unknown source")
-                #     st.write(f"**Source {i}:** {source}")
-                #     st.info(doc.page_content[:700])
+                    st.markdown("### Agent Result")
+                    st.write(result)
 
-            except Exception as e:
-                st.error(f"Error: {e}")
-                st.info("Make sure you uploaded a policy TXT/PDF and clicked Build / Refresh RAG Index.")
+                except Exception as e:
+                    st.error(f"Error: {e}")
+                    st.info("Click 'Build / Refresh RAG Index' first.")
 
 
 with tab3:
@@ -382,10 +499,10 @@ with tab3:
         st.write("Columns:")
         st.write(", ".join(selected_df.columns))
     else:
-        st.warning("No CSV selected. Upload a CSV from Document Controls.")
+        st.warning("No CSV selected. Upload a CSV from the sidebar.")
 
 
 st.divider()
 st.caption(
-    "Built with Streamlit, LangChain, ChromaDB, Hugging Face embeddings, Groq API, and direct LLM-based CSV analysis."
+    "Built with Streamlit, LangChain, ChromaDB, Hugging Face embeddings, Groq API, pandas, CSV RAG, and direct TXT policy retrieval."
 )

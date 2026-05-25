@@ -1,0 +1,7 @@
+Invoices above $12,000 require director approval before payment processing.
+
+Missing PO numbers, payment mismatches, and unpaid invoices older than 10 days must be escalated for manual audit review.
+
+High-risk invoices cannot be auto-approved and require compliance verification.
+
+Security and Finance department vendors require additional approval checks before payment release.
