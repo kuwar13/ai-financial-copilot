@@ -296,6 +296,6 @@ This project demonstrates:
 ## Kuwarpreet Singh
 
 - GitHub: https://github.com/kuwar13
-- LinkedIn: https://www.linkedin.com/in/kuwarpreetsingh/
+- LinkedIn: https://www.linkedin.com/in/kuwarpreet-singh-247827220
 
 ---
