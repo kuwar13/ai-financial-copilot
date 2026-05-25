@@ -291,3 +291,11 @@ This project demonstrates:
 
 ---
 
+# Author
+
+## Kuwarpreet Singh
+
+- GitHub: https://github.com/kuwar13
+- LinkedIn: https://www.linkedin.com/in/kuwarpreetsingh/
+
+---
