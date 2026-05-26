@@ -263,7 +263,6 @@ Do not invent invoice data.
 If the invoice is not present in the selected CSV, say that clearly and then analyze only the pasted invoice text using the selected policy.
 
 Look for:
-- missing PO number
 - unpaid or pending payment status
 - payment amount mismatch
 - unusually high invoice amount
@@ -271,6 +270,7 @@ Look for:
 - due date concerns
 - vendor or department risk
 - policy violations
+-  missing PO number ONLY if the PO Number value is Missing, blank, None, null, or not provided. If a valid PO value like PO-A114 exists, do not mark it as missing.
 
 Selected CSV:
 {selected_csv}
